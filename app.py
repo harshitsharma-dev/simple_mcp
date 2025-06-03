@@ -139,7 +139,7 @@ class MCPServer:
             "mimeType": "application/json"
         }, self._server_info_handler)
 
-    def register_tool(self, name: str, schema: Dict, handler):
+    def register_tool(self, name: str, schema: dict, handler):
         """Register a tool with the MCP server"""
         self.tools[name] = {
             "schema": schema,
@@ -147,7 +147,7 @@ class MCPServer:
         }
         self.capabilities["tools"][name] = schema
 
-    def register_resource(self, name: str, schema: Dict, handler):
+    def register_resource(self, name: str, schema: dict, handler):
         """Register a resource with the MCP server"""
         self.resources[name] = {
             "schema": schema,
@@ -155,7 +155,7 @@ class MCPServer:
         }
         self.capabilities["resources"][name] = schema
 
-    def _calculator_handler(self, params: Dict) -> Dict:
+    def _calculator_handler(self, params: dict) -> dict:
         """Handle calculator tool requests"""
         try:
             operation = params.get("operation")
@@ -193,7 +193,7 @@ class MCPServer:
         except Exception as e:
             return {"error": str(e)}
 
-    def _time_handler(self, params: Dict) -> Dict:
+    def _time_handler(self, params: dict) -> dict:
         """Handle time tool requests"""
         try:
             current_time = datetime.now()
@@ -211,7 +211,7 @@ class MCPServer:
         except Exception as e:
             return {"error": str(e)}
 
-    def _weather_handler(self, params: Dict) -> Dict:
+    def _weather_handler(self, params: dict) -> dict:
         """Handle weather tool requests (mock implementation)"""
         try:
             city = params.get("city", "Unknown")
@@ -244,7 +244,7 @@ class MCPServer:
         except Exception as e:
             return {"error": str(e)}
 
-    def _server_info_handler(self, params: Dict) -> Dict:
+    def _server_info_handler(self, params: dict) -> dict:
         """Handle server info resource requests"""
         server_info = {
             "name": "Flask MCP Server",
