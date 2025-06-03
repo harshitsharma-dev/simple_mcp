@@ -1,13 +1,11 @@
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, send_from_directory, Response
 import json
 import uuid
-import threading
 import time
 from datetime import datetime
-import requests
 import math
-from typing import Dict, List, Any, Optional
 import logging
+from functools import wraps
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -15,20 +13,60 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# OpenAI Plugin Configuration
+OPENAPI_VERSION = "3.0.0"
+PLUGIN_NAME = "Flask MCP Server"
+PLUGIN_DESCRIPTION = "MCP Server with mathematical, time, and weather tools"
+PLUGIN_VERSION = "1.1.0"
+
 class MCPServer:
     def __init__(self):
         self.tools = {}
         self.resources = {}
-        self.prompts = {}
-        self.sessions = {}
         self.capabilities = {
             "tools": {},
-            "resources": {},
-            "prompts": {},
-            "experimental": {}
+            "resources": {}
         }
         self._register_default_tools()
-        self._register_default_resources()
+
+    def _register_default_tools(self):
+        self.register_tool("calculator", {
+            "name": "calculator",
+            "description": "Perform mathematical calculations",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {"type": "string", "enum": ["add", "subtract", "multiply", "divide", "power", "sqrt"]},
+                    "a": {"type": "number"},
+                    "b": {"type": "number", "optional": True}
+                },
+                "required": ["operation", "a"]
+            }
+        }, self._calculator_handler)
+
+        self.register_tool("get_current_time", {
+            "name": "get_current_time",
+            "description": "Get current date and time",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "timezone": {"type": "string", "default": "UTC"}
+                }
+            }
+        }, self._time_handler)
+
+        self.register_tool("weather_info", {
+            "name": "weather_info",
+            "description": "Get weather information for a city",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string"},
+                    "country": {"type": "string", "optional": True}
+                },
+                "required": ["city"]
+            }
+        }, self._weather_handler)
 
     def _register_default_tools(self):
         """Register default tools for the MCP server"""
@@ -227,8 +265,118 @@ class MCPServer:
             ]
         }
 
+
+    # Tool handlers remain the same as original code
+    # ... [include all tool handlers from original code] ...
+
 # Initialize MCP server
 mcp_server = MCPServer()
+
+# OpenAI Plugin Endpoints
+@app.route('/.well-known/ai-plugin.json')
+def serve_ai_plugin():
+    return jsonify({
+        "schema_version": "v1",
+        "name_for_model": "flask_mcp",
+        "name_for_human": PLUGIN_NAME,
+        "description_for_model": PLUGIN_DESCRIPTION,
+        "description_for_human": PLUGIN_DESCRIPTION,
+        "auth": {"type": "none"},
+        "api": {
+            "type": "openapi",
+            "url": f"{request.host_url}openapi.yaml",
+            "is_user_authenticated": False
+        },
+        "logo_url": f"{request.host_url}static/logo.png",
+        "contact_email": "support@example.com",
+        "legal_info_url": f"{request.host_url}legal"
+    })
+
+@app.route('/openapi.yaml')
+def serve_openapi_spec():
+    openapi_spec = f"""
+openapi: 3.0.0
+info:
+  title: {PLUGIN_NAME}
+  description: {PLUGIN_DESCRIPTION}
+  version: {PLUGIN_VERSION}
+servers:
+  - url: {request.host_url}
+paths:
+  /mcp/tools/list:
+    post:
+      summary: List available tools
+      operationId: listTools
+      responses:
+        200:
+          description: List of registered tools
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolList'
+  
+  /mcp/tools/call:
+    post:
+      summary: Execute a tool
+      operationId: callTool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolRequest'
+      responses:
+        200:
+          description: Tool execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolResponse'
+
+components:
+  schemas:
+    ToolList:
+      type: object
+      properties:
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolSchema'
+    
+    ToolSchema:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        parameters:
+          type: object
+    
+    ToolRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        arguments:
+          type: object
+    
+    ToolResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            type: object
+            properties:
+              type: 
+                type: string
+              text: 
+                type: string
+        isError:
+          type: boolean
+    """
+    return Response(openapi_spec, mimetype='text/yaml')
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -343,6 +491,13 @@ def after_request(response):
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     return response
 
+# Enhanced CORS configuration
+@app.after_request
+def apply_cors(response):
+    response.headers['Access-Control-Allow-Origin'] = 'https://chat.openai.com'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
 if __name__ == '__main__':
-    # For local development
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
